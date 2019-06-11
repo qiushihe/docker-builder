@@ -39,18 +39,6 @@ jobs:
           name: Running test
           command: go test -v ./...
 
-  release-snapshot:
-    working_directory: ~/docker-builder
-    docker:
-      - image: circleci/golang:1.12
-    steps:
-      - restore_cache:
-          name: Restoring cache
-          key: docker-builder-{{ .Branch }}-{{ .Revision }}
-      - run:
-          name: Running goreleaser
-          command: curl -sL https://git.io/goreleaser | bash -s -- --rm-dist --snapshot
-
   release-tag:
     working_directory: ~/docker-builder
     docker:
@@ -63,6 +51,33 @@ jobs:
           name: Running goreleaser
           command: curl -sL https://git.io/goreleaser | bash -s -- --rm-dist
 
+  release-snapshot:
+    working_directory: ~/docker-builder
+    docker:
+      - image: circleci/golang:1.12
+    steps:
+      - restore_cache:
+          name: Restoring cache
+          key: docker-builder-{{ .Branch }}-{{ .Revision }}
+      - run:
+          name: Running goreleaser
+          command: curl -sL https://git.io/goreleaser | bash -s -- --rm-dist --snapshot
+      - run:
+          name: Preparing artifacts directory
+          command: |
+            rm -fr ./artifacts
+            mkdir ./artifacts
+            cp -r ./dist/*.zip ./artifacts/
+            cp ./dist/checksums.txt ./artifacts/
+      - run:
+          name: Install ghr
+          command: go get github.com/tcnksm/ghr
+      - run:
+          name: Publish snapshot to GitHub
+          command: |
+            VERSION="snapshot-${CIRCLE_BRANCH}-$(date +%Y%m%d-%H%M%S)"
+            ghr -delete -prerelease -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} ${VERSION} ./artifacts/
+
 workflows:
   version: 2
   default:
@@ -70,26 +85,19 @@ workflows:
       - setup:
           filters:
             tags:
-              only: /.*/ # Required since some jobs that depends on this job has tag filters
+              ignore: /snapshot.*/
       - lint:
           requires:
             - setup
           filters:
             tags:
-              only: /.*/ # Required since some jobs that depends on this job has tag filters
+              ignore: /snapshot.*/
       - test:
           requires:
             - setup
           filters:
             tags:
-              only: /.*/ # Required since some jobs that depends on this job has tag filters
-      - release-snapshot:
-          requires:
-            - lint
-            - test
-          filters:
-            branches:
-              only: master
+              ignore: /snapshot.*/
       - release-tag:
           requires:
             - lint
@@ -101,3 +109,10 @@ workflows:
             tags:
               # ... and only run "release-tag" workflow/job for tags that resemble version numbers.
               only: /v[0-9]+(\.[0-9]+)*(-.*)*/
+      - release-snapshot:
+          requires:
+            - lint
+            - test
+          filters:
+            branches:
+              only: master
