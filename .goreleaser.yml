@@ -20,6 +20,9 @@ snapshot:
 
 release:
   disable: false
+  github:
+    owner: qiushihe
+    name: docker-builder
 
 changelog:
   sort: asc
