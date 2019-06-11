@@ -18,9 +18,6 @@ checksum:
 snapshot:
   name_template: "snapshot"
 
-sign:
-  artifacts: checksum
-
 release:
   disable: false
 
