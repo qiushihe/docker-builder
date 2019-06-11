@@ -1,0 +1,21 @@
+FROM %%BASE_IMAGE%%
+
+RUN apk --update upgrade
+
+%%COMMON_PACKAGES%%
+
+%%APACHE%%
+
+RUN rm -fr %%VOLUMN_PATH%%
+RUN mkdir -p %%VOLUMN_PATH%%
+VOLUME %%VOLUMN_PATH%%
+
+EXPOSE %%PORTS%%
+
+COPY %%_COMMON/shared/echo.sh%% /echo.sh
+COPY %%_COMMON/tests/test.sh%% /test.sh
+COPY %%_COMMON/log.sh%% /log.sh
+
+COPY src/entry.sh /entry.sh
+RUN chmod +x /entry.sh
+ENTRYPOINT ["/entry.sh"]

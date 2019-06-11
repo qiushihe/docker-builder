@@ -1,8 +1,9 @@
 package main
 
 import (
-	"docker-builder/builder"
 	"os"
+
+	"github.com/qiushihe/docker-builder/builder"
 )
 
 func main() {

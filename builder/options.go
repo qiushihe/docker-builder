@@ -3,13 +3,15 @@ package builder
 import (
 	"errors"
 	"flag"
+	"fmt"
 	"strings"
 )
 
 type builderOptions struct {
+	dryRun    bool
 	srcPath   string
 	libPaths  []string
-	buildOpts string
+	buildOpts []string
 }
 
 type stringsFlag []string
@@ -26,14 +28,10 @@ func (v *stringsFlag) Set(value string) error {
 	return nil
 }
 
-func trimString(val string) string {
-	return strings.Trim(val, " \r\n")
-}
-
 func helpMessage() string {
 	return strings.Join([]string{
 		"Usage:",
-		"  $ docker-builder -src [SOURCE PATH] (-lib [LIB PATH])* -- [BUILD OPTIONS]",
+		"  $ docker-builder -src [SOURCE PATH] (-lib [LIB PATH])* (-dry)? -- [BUILD OPTIONS]",
 		"Example:",
 		"  $ docker-builder \\",
 		"    -src path/to/image/dir \\",
@@ -44,10 +42,12 @@ func helpMessage() string {
 }
 
 func parseOptions(args []string) (*builderOptions, error) {
+	var dryRunFlag bool
 	var srcPathFlag string
 	var libPathFlags stringsFlag
 
 	flags := flag.NewFlagSet(args[0], flag.ExitOnError)
+	flags.BoolVar(&dryRunFlag, "dry", false, "dry run")
 	flags.StringVar(&srcPathFlag, "src", "", "source directory")
 	flags.Var(&libPathFlags, "lib", "lib directory")
 
@@ -61,10 +61,20 @@ func parseOptions(args []string) (*builderOptions, error) {
 		libPaths = append(libPaths, trimString(libPathFlag))
 	}
 
+	buildOpts := make([]string, 0)
+	for _, buildArg := range flags.Args() {
+		if strings.Contains(buildArg, " ") {
+			buildOpts = append(buildOpts, fmt.Sprintf("\"%+v\"", buildArg))
+		} else {
+			buildOpts = append(buildOpts, buildArg)
+		}
+	}
+
 	return &builderOptions{
+		dryRun:    dryRunFlag,
 		srcPath:   trimString(srcPathFlag),
 		libPaths:  libPaths,
-		buildOpts: trimString(strings.Join(flags.Args(), " ")),
+		buildOpts: buildOpts,
 	}, nil
 }
 
