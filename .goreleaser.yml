@@ -1,6 +1,8 @@
 builds:
-  - env:
-    - CGO_ENABLED=0
+  -
+    binary: docker-builder
+    env:
+      - CGO_ENABLED=0
 
 archives:
   - replacements:
@@ -14,7 +16,7 @@ checksum:
   name_template: 'checksums.txt'
 
 snapshot:
-  name_template: "{{ .Tag }}-next"
+  name_template: "snapshot"
 
 changelog:
   sort: asc

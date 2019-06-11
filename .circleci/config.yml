@@ -1,0 +1,103 @@
+version: 2
+jobs:
+  setup:
+    working_directory: ~/docker-builder
+    docker:
+      - image: circleci/golang:1.12
+    steps:
+      - checkout
+      - save_cache:
+          name: Saving cache
+          key: docker-builder-{{ .Branch }}-{{ .Revision }}
+          paths:
+            - ~/docker-builder
+
+  lint:
+    working_directory: ~/docker-builder
+    docker:
+      - image: circleci/golang:1.12
+    steps:
+      - restore_cache:
+          name: Restoring cache
+          key: docker-builder-{{ .Branch }}-{{ .Revision }}
+      - run:
+          name: Installing golint
+          command: go get golang.org/x/lint/golint
+      - run:
+          name: Running golint
+          command: golint -set_exit_status
+
+  test:
+    working_directory: ~/docker-builder
+    docker:
+      - image: circleci/golang:1.12
+    steps:
+      - restore_cache:
+          name: Restoring cache
+          key: docker-builder-{{ .Branch }}-{{ .Revision }}
+      - run:
+          name: Running test
+          command: go test -v ./...
+
+  release-snapshot:
+    working_directory: ~/docker-builder
+    docker:
+      - image: circleci/golang:1.12
+    steps:
+      - restore_cache:
+          name: Restoring cache
+          key: docker-builder-{{ .Branch }}-{{ .Revision }}
+      - run:
+          name: Running goreleaser
+          command: curl -sL https://git.io/goreleaser | bash -s -- --rm-dist --snapshot
+
+  release-tag:
+    working_directory: ~/docker-builder
+    docker:
+      - image: circleci/golang:1.12
+    steps:
+      - restore_cache:
+          name: Restoring cache
+          key: docker-builder-{{ .Branch }}-{{ .Revision }}
+      - run:
+          name: Running goreleaser
+          command: curl -sL https://git.io/goreleaser | bash -s -- --rm-dist
+
+workflows:
+  version: 2
+  default:
+    jobs:
+      - setup:
+          filters:
+            tags:
+              only: /.*/ # Required since some jobs that depends on this job has tag filters
+      - lint:
+          requires:
+            - setup
+          filters:
+            tags:
+              only: /.*/ # Required since some jobs that depends on this job has tag filters
+      - test:
+          requires:
+            - setup
+          filters:
+            tags:
+              only: /.*/ # Required since some jobs that depends on this job has tag filters
+      - release-snapshot:
+          requires:
+            - lint
+            - test
+          filters:
+            branches:
+              only: master
+      - release-tag:
+          requires:
+            - lint
+            - test
+          filters:
+            branches:
+              # Don't run "release-tag" workflow/job for any branch ...
+              ignore: /.*/
+            tags:
+              # ... and only run "release-tag" workflow/job for tags that resemble version numbers.
+              only: /v[0-9]+(\.[0-9]+)*(-.*)*/

@@ -319,6 +319,7 @@ func (b *dockerBuilder) buildImage() error {
 	return nil
 }
 
+// Start starts the template and/or image build process
 func Start(args []string) int {
 	opts, err := parseOptions(args)
 	if err != nil {
