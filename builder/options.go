@@ -12,6 +12,7 @@ type builderOptions struct {
 	srcPath   string
 	libPaths  []string
 	buildOpts []string
+	outPath   string
 }
 
 type stringsFlag []string
@@ -31,10 +32,11 @@ func (v *stringsFlag) Set(value string) error {
 func helpMessage() string {
 	return strings.Join([]string{
 		"Usage:",
-		"  $ docker-builder -src [SOURCE PATH] (-lib [LIB PATH])* (-dry)? -- [BUILD OPTIONS]",
+		"  $ docker-builder -src [SOURCE PATH] (-lib [LIB PATH])* (-out [OUT PATH])? (-dry)? -- [BUILD OPTIONS]",
 		"Example:",
 		"  $ docker-builder \\",
 		"    -src path/to/image/dir \\",
+		"    -out path/to/output/dir \\",
 		"    -lib path/to/lib \\",
 		"    -lib path/to/another/lib \\",
 		"    -- -t my/image:tag",
@@ -44,11 +46,13 @@ func helpMessage() string {
 func parseOptions(args []string) (*builderOptions, error) {
 	var dryRunFlag bool
 	var srcPathFlag string
+	var outPathFlag string
 	var libPathFlags stringsFlag
 
 	flags := flag.NewFlagSet(args[0], flag.ExitOnError)
 	flags.BoolVar(&dryRunFlag, "dry", false, "dry run")
 	flags.StringVar(&srcPathFlag, "src", "", "source directory")
+	flags.StringVar(&outPathFlag, "out", "", "output directory")
 	flags.Var(&libPathFlags, "lib", "lib directory")
 
 	err := flags.Parse(args[1:])
@@ -73,6 +77,7 @@ func parseOptions(args []string) (*builderOptions, error) {
 	return &builderOptions{
 		dryRun:    dryRunFlag,
 		srcPath:   trimString(srcPathFlag),
+		outPath:   trimString(outPathFlag),
 		libPaths:  libPaths,
 		buildOpts: buildOpts,
 	}, nil
