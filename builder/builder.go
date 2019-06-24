@@ -14,10 +14,10 @@ import (
 )
 
 type dockerBuilder struct {
-	options   *builderOptions
-	srcPath   string
-	buildPath string
-	libPaths  []string
+	options  *builderOptions
+	srcPath  string
+	outPath  string
+	libPaths []string
 }
 
 func newDockerBuilder(options *builderOptions) *dockerBuilder {
@@ -30,22 +30,22 @@ func (b *dockerBuilder) build() error {
 		return err
 	}
 
-	err = b.ensureBuildDirectory()
+	err = b.ensureOutputDirectory()
 	if err != nil {
 		return err
 	}
 
-	err = b.prepareBuildDirectory()
+	err = b.prepareOutputDirectory()
 	if err != nil {
 		return err
 	}
 
-	buildTemplate, err := b.validateBuildDirectory()
+	shouldBuildTemplate, err := b.validateOutputDirectory()
 	if err != nil {
 		return err
 	}
 
-	if buildTemplate {
+	if shouldBuildTemplate {
 		err = b.buildTemplate()
 		if err != nil {
 			return err
@@ -65,9 +65,16 @@ func (b *dockerBuilder) ensurePaths() error {
 	if err != nil {
 		return fmt.Errorf("unable to determine absolute path for: %+v", b.options.srcPath)
 	}
-
 	b.srcPath = absSrcPath
-	b.buildPath = filepath.Join(b.srcPath, "_docker-build")
+
+	b.outPath = filepath.Join(b.srcPath, "_docker-build")
+	if len(b.options.outPath) > 0 {
+		absOutPath, err := filepath.Abs(b.options.outPath)
+		if err != nil {
+			return fmt.Errorf("unable to determine absolute path for: %+v", b.options.srcPath)
+		}
+		b.outPath = absOutPath
+	}
 
 	b.libPaths = make([]string, 0)
 	for _, libPath := range b.options.libPaths {
@@ -81,13 +88,13 @@ func (b *dockerBuilder) ensurePaths() error {
 	return nil
 }
 
-func (b *dockerBuilder) ensureBuildDirectory() error {
-	err := os.RemoveAll(b.buildPath)
+func (b *dockerBuilder) ensureOutputDirectory() error {
+	err := os.RemoveAll(b.outPath)
 	if err != nil {
 		return err
 	}
 
-	err = os.MkdirAll(b.buildPath, 0755)
+	err = os.MkdirAll(b.outPath, 0755)
 	if err != nil {
 		return err
 	}
@@ -95,24 +102,24 @@ func (b *dockerBuilder) ensureBuildDirectory() error {
 	return nil
 }
 
-func (b *dockerBuilder) prepareBuildDirectory() error {
+func (b *dockerBuilder) prepareOutputDirectory() error {
 	if _, err := os.Stat(filepath.Join(b.srcPath, "Dockerfile.template")); err == nil {
 		// If Dockerfile.template exists, then copy it over.
-		if err = copy.Copy(filepath.Join(b.srcPath, "Dockerfile.template"), filepath.Join(b.buildPath, "Dockerfile.template")); err != nil {
+		if err = copy.Copy(filepath.Join(b.srcPath, "Dockerfile.template"), filepath.Join(b.outPath, "Dockerfile.template")); err != nil {
 			return err
 		}
 	} else {
 		// If Dockerfile.template doesn't exist ...
 		if _, err := os.Stat(filepath.Join(b.srcPath, "Dockerfile")); err == nil {
 			// ... but Dockerfile exists, then copy Dockerfile over ...
-			if err = copy.Copy(filepath.Join(b.srcPath, "Dockerfile"), filepath.Join(b.buildPath, "Dockerfile")); err != nil {
+			if err = copy.Copy(filepath.Join(b.srcPath, "Dockerfile"), filepath.Join(b.outPath, "Dockerfile")); err != nil {
 				return err
 			}
 		}
 	}
 
 	if _, err := os.Stat(filepath.Join(b.srcPath, "src")); err == nil {
-		if err = copy.Copy(filepath.Join(b.srcPath, "src"), filepath.Join(b.buildPath, "src")); err != nil {
+		if err = copy.Copy(filepath.Join(b.srcPath, "src"), filepath.Join(b.outPath, "src")); err != nil {
 			return err
 		}
 	}
@@ -120,7 +127,7 @@ func (b *dockerBuilder) prepareBuildDirectory() error {
 	return nil
 }
 
-func (b *dockerBuilder) validateBuildDirectory() (bool, error) {
+func (b *dockerBuilder) validateOutputDirectory() (bool, error) {
 	hasDockerfileTemplate := false
 	hasDockerfile := false
 
@@ -142,7 +149,7 @@ func (b *dockerBuilder) validateBuildDirectory() (bool, error) {
 }
 
 func (b *dockerBuilder) buildTemplate() error {
-	dockerfileTemplate, err := readFileToString(filepath.Join(b.buildPath, "Dockerfile.template"))
+	dockerfileTemplate, err := readFileToString(filepath.Join(b.outPath, "Dockerfile.template"))
 	if err != nil {
 		return err
 	}
@@ -156,7 +163,7 @@ func (b *dockerBuilder) buildTemplate() error {
 		for _, libPath := range b.libPaths {
 			libFilePath := filepath.Join(libPath, pathString)
 			if _, err := os.Stat(libFilePath); err == nil {
-				err = copy.Copy(libFilePath, filepath.Join(b.buildPath, pathString))
+				err = copy.Copy(libFilePath, filepath.Join(b.outPath, pathString))
 				if err != nil {
 					return err
 				}
@@ -190,7 +197,7 @@ func (b *dockerBuilder) buildTemplate() error {
 		dockerfileTemplate = strings.ReplaceAll(dockerfileTemplate, templateString, valueString)
 	}
 
-	return writeStringToFile(filepath.Join(b.buildPath, "Dockerfile"), dockerfileTemplate)
+	return writeStringToFile(filepath.Join(b.outPath, "Dockerfile"), dockerfileTemplate)
 }
 
 func (b *dockerBuilder) readAllVariables() (map[string]string, error) {
@@ -286,15 +293,15 @@ func (b *dockerBuilder) readFragmentVariables() (map[string]string, error) {
 }
 
 func (b *dockerBuilder) buildImage() error {
-	err := os.RemoveAll(filepath.Join(b.buildPath, "Dockerfile.template"))
+	err := os.RemoveAll(filepath.Join(b.outPath, "Dockerfile.template"))
 	if err != nil {
 		return err
 	}
 
 	if b.options.dryRun {
-		buildCommand := fmt.Sprintf("docker build %+v %+v", strings.Join(b.options.buildOpts, " "), b.buildPath)
+		buildCommand := fmt.Sprintf("docker build %+v %+v", strings.Join(b.options.buildOpts, " "), b.outPath)
 
-		dockerFile, err := readFileToString(filepath.Join(b.buildPath, "Dockerfile"))
+		dockerFile, err := readFileToString(filepath.Join(b.outPath, "Dockerfile"))
 		if err != nil {
 			return err
 		}
@@ -305,7 +312,7 @@ func (b *dockerBuilder) buildImage() error {
 	} else {
 		dockerOptions := []string{"build"}
 		dockerOptions = append(dockerOptions, b.options.buildOpts...)
-		dockerOptions = append(dockerOptions, b.buildPath)
+		dockerOptions = append(dockerOptions, b.outPath)
 
 		cmd := exec.Command("docker", dockerOptions...)
 		cmd.Stdout = os.Stdout

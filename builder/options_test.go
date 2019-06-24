@@ -15,6 +15,17 @@ func TestOptions(t *testing.T) {
 			}
 		})
 
+		t.Run("parse output directory option", func(t *testing.T) {
+			opts, err := parseOptions([]string{"", "-out", "path/to/out"})
+			if err != nil {
+				t.Fatalf("failed to parse options: %+v", err)
+			}
+
+			if opts.outPath != "path/to/out" {
+				t.Fatalf("unexpected output directory option: %+v", opts.outPath)
+			}
+		})
+
 		t.Run("parse lib directory option", func(t *testing.T) {
 			opts, err := parseOptions([]string{"", "-lib", "path/to/lib"})
 			if err != nil {
